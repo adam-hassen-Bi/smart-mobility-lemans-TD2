@@ -2,110 +2,588 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Smart Mobility Le Mans — SETRAM network status</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Mobility Le Mans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
-  .kpis { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
-  .kpi { flex: 1; min-width: 180px; padding: 0.8rem 1rem; border: 1px solid #ccc; border-radius: 8px; }
-  .kpi .value { font-size: 1.6rem; font-weight: bold; color: #0d7c9e; }
-  .kpi .label { font-size: 0.8rem; color: #666; }
-  #alerts { padding: 0.8rem 1rem; border: 2px solid #c46e0a; border-radius: 8px; background: #faf3e8; }
-  #alerts.none { border-color: #2c9c4a; background: #f0f8f2; }
-  canvas { margin-top: 2rem; }
-  #updated { color: #666; font-size: 0.85rem; }
+  :root {
+    color-scheme: light;
+    --bg: #f4f3ef; --surface: #fcfcfb; --border: #e4e2dc; --grid: #ebe9e3;
+    --text: #0b0b0b; --text-2: #52514e; --text-3: #7d7c77;
+    --early: #2a78d6;  /* diverging cool pole */
+    --late: #e34948;   /* diverging warm pole */
+    --neutral: #c9c7c0; /* diverging midpoint (on time) */
+    --band: rgba(120,118,110,.10);
+    --accent: #2a78d6; --line: #2a78d6;
+    --seq-lo: #cde2fb; --seq-hi: #104281;
+    --good: #0f7a3a; --good-bg: #e3f3e8; --warn: #8a5a00; --warn-bg: #fdf0d2;
+    --crit: #b02a2a; --crit-bg: #fbe5e3;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121211; --surface: #1a1a19; --border: #2c2c2a; --grid: #262624;
+      --text: #f0efec; --text-2: #c3c2b7; --text-3: #8e8d86;
+      --early: #3987e5; --late: #e66767; --neutral: #55544f; --band: rgba(200,198,190,.08);
+      --accent: #5598e7; --line: #5598e7; --seq-lo: #1c3350; --seq-hi: #9ec5f4;
+      --good: #6fd391; --good-bg: #16301f; --warn: #f1c25b; --warn-bg: #352a10;
+      --crit: #f08a8a; --crit-bg: #3a1a1a; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --border: #2c2c2a; --grid: #262624;
+    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8e8d86;
+    --early: #3987e5; --late: #e66767; --neutral: #55544f; --band: rgba(200,198,190,.08);
+    --accent: #5598e7; --line: #5598e7; --seq-lo: #1c3350; --seq-hi: #9ec5f4;
+    --good: #6fd391; --good-bg: #16301f; --warn: #f1c25b; --warn-bg: #352a10;
+    --crit: #f08a8a; --crit-bg: #3a1a1a; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 16px 48px; }
+  .num { font-variant-numeric: tabular-nums; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); margin: 0 0 6px; }
+  h1 { font-family: Fraunces, Georgia, serif; font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; letter-spacing: -.01em; }
+  .lede { margin: 8px 0 0; color: var(--text-2); max-width: 680px; }
+  .status { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+  .badge.good { color: var(--good); background: var(--good-bg); }
+  .badge.warn { color: var(--warn); background: var(--warn-bg); }
+  .updated { font-size: 13px; color: var(--text-3); }
+  h2.section { font-family: Fraunces, Georgia, serif; font-weight: 600; font-size: 24px; margin: 36px 0 4px; }
+  p.section-sub { color: var(--text-2); margin: 0 0 16px; max-width: 760px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); min-width: 0; }
+  .card h3 { font-size: 15px; font-weight: 600; margin: 0; }
+  .card .sub { font-size: 13px; color: var(--text-3); margin: 2px 0 14px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .g-7-5 { grid-template-columns: minmax(0,7fr) minmax(0,5fr); }
+  .g-5-7 { grid-template-columns: minmax(0,5fr) minmax(0,7fr); }
+  @media (max-width: 880px) { .g2, .g-7-5, .g-5-7 { grid-template-columns: 1fr; } }
+  .mt { margin-top: 16px; }
+
+  /* KPI tiles */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+  @media (max-width: 880px) { .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  .kpi .k { font-size: 13px; color: var(--text-3); }
+  .kpi .v { font-size: 32px; font-weight: 700; line-height: 1.15; margin-top: 4px; }
+  .kpi .v small { font-size: 15px; font-weight: 500; color: var(--text-2); }
+  .kpi .d { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+
+  /* alerts */
+  .alerts { margin-top: 16px; padding: 14px 18px; border-radius: 12px; font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
+  .alerts.none { background: var(--good-bg); color: var(--good); }
+  .alerts.some { background: var(--warn-bg); color: var(--warn); }
+  .alerts ul { margin: 4px 0 0; padding-left: 18px; color: var(--text); }
+  .alerts b { font-weight: 600; }
+
+  /* toggle */
+  .seg-ctrl { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; gap: 2px; }
+  .seg-ctrl button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-2); padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+  .seg-ctrl button.on { background: var(--text); color: var(--surface); }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+
+  /* diverging route bars */
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-2); margin-bottom: 10px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .div-head { display: grid; grid-template-columns: 52px 1fr 64px; gap: 8px; font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+  .div-head .axis { display: flex; justify-content: space-between; }
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .rows li { display: grid; grid-template-columns: 52px 1fr 64px; gap: 8px; align-items: center; height: 22px; font-size: 13px; border-radius: 6px; }
+  .rows li:hover { background: var(--grid); }
+  .rows .nm { font-weight: 600; text-align: right; }
+  .rows .track { position: relative; height: 100%; }
+  .rows .zero { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--text-3); }
+  .rows .ontime { position: absolute; top: 0; bottom: 0; background: var(--band); }
+  .rows .bar { position: absolute; top: 5px; height: 12px; transition: all .3s ease; }
+  .rows .val { text-align: right; color: var(--text-2); }
+
+  /* svg charts */
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  svg.chart text { fill: var(--text-2); font-size: 11px; font-family: inherit; }
+  svg.chart .gridline { stroke: var(--grid); }
+  svg.chart .zero { stroke: var(--text-3); }
+  svg.chart .band { fill: var(--band); }
+  svg.chart .ln { fill: none; stroke: var(--line); stroke-width: 2; stroke-linejoin: round; }
+  svg.chart .pt { fill: var(--line); stroke: var(--surface); stroke-width: 2; }
+  svg.chart .hit { fill: transparent; cursor: crosshair; }
+  svg.chart .cross { stroke: var(--text-3); stroke-dasharray: 3 3; }
+  .empty { color: var(--text-3); font-size: 14px; padding: 28px 0; text-align: center; }
+  .note { font-size: 13px; color: var(--text-3); margin-top: 10px; }
+
+  /* tables */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; color: var(--text-2); cursor: pointer; user-select: none; background: var(--surface); }
+  th .arr { color: var(--accent); }
+  tbody tr:hover { background: var(--grid); }
+  #communes th:nth-child(2), #communes th:nth-child(7), #communes th:nth-child(9) { text-align: left; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .pill.warn { color: var(--warn); background: var(--warn-bg); }
+  .pill.crit { color: var(--crit); background: var(--crit-bg); }
+
+  /* supply bars */
+  .sbars li { grid-template-columns: 150px 1fr 56px; }
+  .sbars .nm { text-align: left; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sbars .bar { left: 0; border-radius: 0 4px 4px 0; background: var(--accent); }
+  .sbars li.flag .bar { background: repeating-linear-gradient(45deg, var(--accent) 0 4px, transparent 4px 7px); outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+  .sbars .ref { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 2px dashed var(--text-3); }
+
+  /* map */
+  #map { height: 460px; border-radius: 10px; background: var(--grid); }
+  .leaflet-container { font: inherit; }
+  .leaflet-tooltip.tt { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.15); padding: 8px 10px; }
+  .leaflet-tooltip.tt::before { display: none; }
+  .leaflet-tooltip.lbl { background: none; border: none; box-shadow: none; color: var(--text); font-weight: 600; font-size: 11px; padding: 0; text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface), 0 0 3px var(--surface); }
+  .leaflet-tooltip.lbl::before { display: none; }
+  .scale { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); margin-top: 10px; flex-wrap: wrap; }
+  .scale .bar { width: 110px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--seq-lo), var(--seq-hi)); }
+
+  #tip { position: fixed; pointer-events: none; z-index: 1000; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.15); padding: 8px 10px; font-size: 13px; opacity: 0; transition: opacity .1s; max-width: 260px; }
+  .tt-title { font-weight: 700; margin-bottom: 4px; }
+  .tt-row { display: flex; justify-content: space-between; gap: 16px; color: var(--text-2); }
+  .tt-row b { color: var(--text); font-weight: 600; }
+
+  details.method summary { cursor: pointer; font-weight: 600; }
+  details.method li, details.method p { color: var(--text-2); font-size: 14px; }
+  footer { margin-top: 28px; font-size: 12px; color: var(--text-3); text-align: center; }
 </style>
 </head>
 <body>
-  <h1>SETRAM network — current status</h1>
-  <p>Real-time delay and disruption snapshot for Le Mans Métropole's bus and tram network.</p>
-  <div class="kpis" id="kpis">Loading...</div>
-  <div id="alerts">Loading alerts...</div>
-  <canvas id="delayChart" height="320"></canvas>
-  <p id="updated"></p>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Smart Mobility Le Mans · SETRAM bus &amp; tram network</p>
+      <h1>Where — and when — should Le Mans Métropole act first?</h1>
+      <p class="lede">Live punctuality from SETRAM's real-time feed, its history as it builds up, and scheduled supply compared with where people live.</p>
+    </div>
+    <div class="status">
+      <span class="badge" id="fresh">…</span>
+      <span class="updated num" id="updated"></span>
+    </div>
+  </header>
+
+  <!-- ============ RIGHT NOW ============ -->
+  <h2 class="section">Right now</h2>
+  <p class="section-sub">The latest 15-minute snapshot of every route reporting live positions.</p>
+  <div class="kpis" id="kpis"></div>
+  <div class="alerts" id="alerts"></div>
+
+  <div class="grid g-7-5 mt">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h3>Delay by route</h3>
+          <p class="sub">Average gap between real and scheduled arrival, this snapshot.</p>
+        </div>
+        <div class="seg-ctrl" id="mode">
+          <button data-m="signed" class="on">Early / late</button>
+          <button data-m="abs">Off schedule</button>
+        </div>
+      </div>
+      <div class="legend" id="routeLegend"></div>
+      <div class="div-head"><span></span><span class="axis num" id="axisLabels"></span><span></span></div>
+      <ul class="rows" id="routes"></ul>
+    </section>
+    <section class="card">
+      <h3>Routes to watch</h3>
+      <p class="sub">Worst average delay right now, with what is behind it.</p>
+      <div class="table-wrap"><table id="watch"></table></div>
+      <p class="note">“Worst trip” is the single most delayed stop-time update on that route. Skipped stops are stops the vehicle will not serve.</p>
+    </section>
+  </div>
+
+  <!-- ============ OVER TIME ============ -->
+  <h2 class="section">Over time</h2>
+  <p class="section-sub" id="histSub">The real-time feed has no archive: this history only exists because the pipeline saves a snapshot every 15 minutes. Recurring patterns become reliable after a few weeks.</p>
+  <div class="grid g2">
+    <section class="card">
+      <h3>Network delay, last 7 days</h3>
+      <p class="sub">Average delay across all live stop-time updates, one point per snapshot. Grey band = on time.</p>
+      <div id="timeline"></div>
+    </section>
+    <section class="card">
+      <h3>When is it worst?</h3>
+      <p class="sub">Average delay by hour of the day (Le Mans time), last 7 days.</p>
+      <div id="hours"></div>
+    </section>
+  </div>
+  <section class="card mt">
+    <h3>Routes repeatedly late</h3>
+    <p class="sub">Last 7 days. A route is “late” in a snapshot when it averages more than <span id="lateThr">3</span> minutes behind schedule.</p>
+    <div class="table-wrap"><table id="chronic"></table></div>
+  </section>
+
+  <!-- ============ SUPPLY VS POPULATION ============ -->
+  <h2 class="section">Supply vs. where people live</h2>
+  <p class="section-sub">Scheduled weekday service in each of the 20 communes, relative to population. Population stands in for demand — no transit agency publishes real ridership — so read this as a first filter, not an answer.</p>
+  <div class="grid g-5-7">
+    <section class="card">
+      <h3>Scheduled stop-visits per 1,000 residents</h3>
+      <p class="sub">One bus or tram stopping once at one stop = one stop-visit. Dashed line = network average.</p>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Commune</span><span><i style="background:repeating-linear-gradient(45deg,var(--accent) 0 3px,transparent 3px 5px);outline:1.5px solid var(--accent);outline-offset:-1.5px"></i>Treat with caution (see table)</span></div>
+      <ul class="rows sbars" id="supply"></ul>
+    </section>
+    <section class="card">
+      <h3>On the map</h3>
+      <p class="sub">Small dots: stops, sized by weekday visits. Large circles: communes, shaded by visits per 1,000 residents.</p>
+      <div id="map"></div>
+      <div class="scale"><span>Less supply per resident</span><span class="bar"></span><span>More</span></div>
+    </section>
+  </div>
+  <section class="card mt">
+    <h3>All communes</h3>
+    <p class="sub">Click a column to sort. Flags explain when the ranking should not be trusted at face value.</p>
+    <div class="table-wrap"><table id="communes"></table></div>
+    <p class="note">Each stop is assigned to the commune whose <b>centre</b> is nearest, not to the commune it is actually in. Le Mans is large and its centre is in the middle, so stops in its outer neighbourhoods are often counted for the small neighbouring communes — which inflates them and deflates Le Mans.</p>
+  </section>
+
+  <section class="card mt">
+    <details class="method">
+      <summary>How these numbers are built</summary>
+      <ul>
+        <li><b>Sources</b>: SETRAM static GTFS (routes, stops, timetable) and GTFS-RT TripUpdate / Alert feeds, via transport.data.gouv.fr; INSEE legal population of the 20 communes.</li>
+        <li><b>Delay</b>: for each stop-time update in the live feed, real minus scheduled time (negative = early). A route's delay is the average over all its updates in the snapshot; the network figure weights every update equally.</li>
+        <li><b>On time</b> here means between 1 minute early and 3 minutes late.</li>
+        <li><b>Supply</b>: number of scheduled stop-visits on a representative weekday (the Tuesday service with the longest validity), summed per commune.</li>
+        <li><b>Refresh</b>: live data every 15 minutes, static reference and supply view on the 1st of each month — the schedule and population barely change in between.</li>
+      </ul>
+    </details>
+  </section>
+
+  <footer>Automated with GitHub Actions · Data: SETRAM / transport.data.gouv.fr, INSEE · Map: © OpenStreetMap © CARTO</footer>
+</div>
+<div id="tip"></div>
 
 <script>
-fetch('data/current_state.json')
-  .then(r => r.json())
-  .then(data => {
-    const routes = data.routes || [];
+(function () {
+  const $ = id => document.getElementById(id);
+  const tip = $('tip');
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = (v, d = 0) => Number(v).toLocaleString('en-GB', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const EARLY_OK = -60, LATE_OK = 180;
+  const fmtDelay = s => {
+    const sign = s < 0 ? '−' : s > 0 ? '+' : '';
+    const a = Math.abs(Math.round(s));
+    return a < 60 ? `${sign}${a} s` : `${sign}${Math.floor(a / 60)} min ${String(a % 60).padStart(2, '0')}`;
+  };
 
-    document.getElementById('kpis').innerHTML = `
-      <div class="kpi"><div class="value">${data.network_avg_delay_s.toFixed(1)}s</div><div class="label">Network average delay</div></div>
-      <div class="kpi"><div class="value">${data.n_routes_reporting}</div><div class="label">Routes reporting</div></div>
-      <div class="kpi"><div class="value">${data.alerts.length}</div><div class="label">Active alerts</div></div>
-    `;
+  function showTip(html, x, y) {
+    tip.innerHTML = html; tip.style.opacity = 1;
+    const r = tip.getBoundingClientRect();
+    let l = x + 14, t = y + 14;
+    if (l + r.width > innerWidth - 8) l = x - r.width - 14;
+    if (t + r.height > innerHeight - 8) t = y - r.height - 14;
+    tip.style.left = l + 'px'; tip.style.top = t + 'px';
+  }
+  const hideTip = () => tip.style.opacity = 0;
+  const bindTip = (el, html) => { el.addEventListener('mousemove', e => showTip(html, e.clientX, e.clientY)); el.addEventListener('mouseleave', hideTip); };
 
-    document.getElementById('updated').textContent = `Data last updated ${data.generated_at}`;
+  const getJSON = url => fetch(url, { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null);
 
-    const alertsEl = document.getElementById('alerts');
-    if (!data.alerts || data.alerts.length === 0) {
-      alertsEl.classList.add('none');
-      alertsEl.innerHTML = '<strong>No active alerts.</strong>';
-    } else {
-      alertsEl.innerHTML = '<strong>Active alerts:</strong><ul>' +
-        data.alerts.map(a => `<li>[Route ${a.routes || '?'}] ${a.header}</li>`).join('') +
-        '</ul>';
+  Promise.all([getJSON('data/current_state.json'), getJSON('data/history.json'), getJSON('data/supply_demand.json')])
+    .then(([cur, hist, sup]) => {
+      renderHeader(cur);
+      if (cur) renderNow(cur);
+      renderHistory(hist);
+      if (sup) renderSupply(sup);
+    });
+
+  // ---------------- header ----------------
+  function renderHeader(cur) {
+    const b = $('fresh');
+    const t = cur ? new Date(cur.generated_at) : null;
+    if (!t || isNaN(t)) { b.className = 'badge warn'; b.textContent = '▲ No live data yet'; return; }
+    const ageMin = (Date.now() - t) / 60000;
+    if (ageMin <= 60) { b.className = 'badge good'; b.textContent = '● Live — updated every 15 min'; }
+    else { b.className = 'badge warn'; b.textContent = `▲ Data is ${ageMin > 1440 ? fmt(ageMin / 1440) + ' days' : fmt(ageMin / 60) + ' h'} old — pipeline may be stopped`; }
+    $('updated').textContent = 'Snapshot ' + t.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' }) + ' (Le Mans time)';
+  }
+
+  // ---------------- right now ----------------
+  let routes = [], mode = 'signed';
+  function renderNow(cur) {
+    routes = (cur.routes || []).filter(r => r.n_stop_updates > 0);
+    const upd = routes.reduce((s, r) => s + r.n_stop_updates, 0);
+    const netDelay = upd ? routes.reduce((s, r) => s + r.avg_delay_s * r.n_stop_updates, 0) / upd : 0;
+    const late = routes.filter(r => r.avg_delay_s > LATE_OK);
+    const worst = [...routes].sort((a, b) => b.avg_delay_s - a.avg_delay_s)[0];
+    const alerts = cur.alerts || [];
+    $('kpis').innerHTML = `
+      <div class="card kpi"><div class="k">Network average delay</div><div class="v num">${fmtDelay(netDelay)}</div><div class="d num">${fmt(upd)} live stop-time updates</div></div>
+      <div class="card kpi"><div class="k">Routes more than 3 min late</div><div class="v num">${late.length} <small>/ ${routes.length}</small></div><div class="d">${late.length ? esc(late.map(r => r.route_name).join(', ')) : 'All routes within 3 min'}</div></div>
+      <div class="card kpi"><div class="k">Most delayed route</div><div class="v num">${worst ? esc(worst.route_name) : '—'} <small>${worst ? fmtDelay(worst.avg_delay_s) : ''}</small></div><div class="d num">${worst ? 'worst trip ' + fmtDelay(worst.max_delay_s) : ''}</div></div>
+      <div class="card kpi"><div class="k">Active service alerts</div><div class="v num">${alerts.length}</div><div class="d">${alerts.length ? 'see below' : 'no disruption announced'}</div></div>`;
+    const a = $('alerts');
+    if (!alerts.length) { a.className = 'alerts none'; a.innerHTML = '<span>●</span><span><b>No active service alerts</b> on the SETRAM network.</span>'; }
+    else {
+      a.className = 'alerts some';
+      a.innerHTML = `<span>▲</span><span><b>${alerts.length} active alert${alerts.length > 1 ? 's' : ''}</b><ul>${alerts.map(x => `<li><b>${x.routes ? 'Route ' + esc(x.routes) : 'Network'}</b> — ${esc(x.header || 'no description')}</li>`).join('')}</ul></span>`;
     }
+    document.querySelectorAll('#mode button').forEach(btn => btn.addEventListener('click', () => {
+      mode = btn.dataset.m;
+      document.querySelectorAll('#mode button').forEach(x => x.classList.toggle('on', x === btn));
+      renderRoutes();
+    }));
+    renderRoutes();
+    renderWatch();
+  }
 
-    if (routes.length === 0) {
-      document.getElementById('delayChart').outerHTML =
-        '<p>No route data yet -- trigger the collect_snapshot workflow from the Actions tab.</p>';
+  function routeColor(d) {
+    if (d >= EARLY_OK && d <= LATE_OK) return css('--neutral');
+    return d > 0 ? css('--late') : css('--early');
+  }
+  function renderRoutes() {
+    const legend = $('routeLegend');
+    if (mode === 'signed') {
+      legend.innerHTML = `<span><i style="background:var(--early)"></i>Early (more than 1 min)</span><span><i style="background:var(--neutral)"></i>On time</span><span><i style="background:var(--late)"></i>Late (more than 3 min)</span>`;
+    } else {
+      legend.innerHTML = `<span><i style="background:var(--neutral)"></i>On time</span><span><i style="background:var(--late)"></i>Off schedule — early <b>or</b> late, both strand passengers</span>`;
+    }
+    const sorted = [...routes].sort((a, b) => mode === 'signed' ? b.avg_delay_s - a.avg_delay_s : Math.abs(b.avg_delay_s) - Math.abs(a.avg_delay_s));
+    const maxAbs = Math.max(60, ...routes.map(r => Math.abs(r.avg_delay_s)));
+    let lo, hi;
+    if (mode === 'signed') { lo = Math.min(-60, ...routes.map(r => r.avg_delay_s)); hi = Math.max(LATE_OK, ...routes.map(r => r.avg_delay_s)); }
+    else { lo = 0; hi = Math.max(LATE_OK, maxAbs); }
+    const pct = v => (v - lo) / (hi - lo) * 100;
+    $('axisLabels').innerHTML = `<span>${mode === 'signed' ? '← early ' + fmtDelay(lo) : '0'}</span><span>${mode === 'signed' ? fmtDelay(hi) + ' late →' : fmtDelay(hi) + ' off'}</span>`;
+    const ul = $('routes');
+    ul.innerHTML = sorted.map((r, i) => {
+      const v = mode === 'signed' ? r.avg_delay_s : Math.abs(r.avg_delay_s);
+      const z = pct(0), x = pct(v);
+      const left = Math.min(z, x), width = Math.abs(x - z);
+      const off = r.avg_delay_s < EARLY_OK || r.avg_delay_s > LATE_OK;
+      const col = mode === 'signed' ? routeColor(r.avg_delay_s) : (off ? css('--late') : css('--neutral'));
+      const radius = v >= 0 ? '0 4px 4px 0' : '4px 0 0 4px';
+      const bandL = mode === 'signed' ? pct(EARLY_OK) : pct(0), bandR = mode === 'signed' ? pct(LATE_OK) : pct(r.avg_delay_s < 0 ? -EARLY_OK : LATE_OK);
+      return `<li data-i="${i}"><span class="nm">${esc(r.route_name)}</span>
+        <span class="track"><span class="ontime" style="left:${bandL}%;width:${Math.max(0, (mode === 'signed' ? pct(LATE_OK) : pct(LATE_OK)) - bandL)}%"></span>
+        <span class="zero" style="left:${z}%"></span>
+        <span class="bar" style="left:${left}%;width:${Math.max(width, .6)}%;background:${col};border-radius:${radius}"></span></span>
+        <span class="val num">${fmtDelay(r.avg_delay_s)}</span></li>`;
+    }).join('');
+    ul.querySelectorAll('li').forEach(li => {
+      const r = sorted[+li.dataset.i];
+      bindTip(li, `<div class="tt-title">Route ${esc(r.route_name)}</div>
+        <div class="tt-row">Average delay <b class="num">${fmtDelay(r.avg_delay_s)}</b></div>
+        <div class="tt-row">Worst trip <b class="num">${fmtDelay(r.max_delay_s)}</b></div>
+        <div class="tt-row">Trips observed <b class="num">${r.n_trips_observed}</b></div>
+        <div class="tt-row">Stop-time updates <b class="num">${r.n_stop_updates}</b></div>
+        <div class="tt-row">Skipped stops <b class="num">${r.n_skipped}</b></div>`);
+    });
+  }
+  function renderWatch() {
+    const top = [...routes].sort((a, b) => b.avg_delay_s - a.avg_delay_s).slice(0, 8);
+    $('watch').innerHTML = `<thead><tr><th>Route</th><th>Avg delay</th><th>Worst trip</th><th>Trips</th><th>Skipped</th></tr></thead><tbody>` +
+      top.map(r => `<tr><td><b>${esc(r.route_name)}</b></td><td class="num">${fmtDelay(r.avg_delay_s)}</td><td class="num">${fmtDelay(r.max_delay_s)}</td><td class="num">${r.n_trips_observed}</td><td class="num">${r.n_skipped ? `<span class="pill warn">${r.n_skipped}</span>` : 0}</td></tr>`).join('') + '</tbody>';
+  }
+
+  // ---------------- history ----------------
+  function renderHistory(h) {
+    if (!h || !h.snapshots || !h.snapshots.length) {
+      ['timeline', 'hours'].forEach(id => $(id).innerHTML = '<div class="empty">No history yet — it appears after the first snapshots.</div>');
+      $('chronic').outerHTML = '<div class="empty">No history yet.</div>';
       return;
     }
+    $('lateThr').textContent = fmt(h.late_threshold_s / 60);
+    const since = new Date(h.first_ts * 1000).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' });
+    const days = (h.snapshots[h.snapshots.length - 1].ts - h.first_ts) / 86400;
+    $('histSub').textContent = `${fmt(h.n_snapshots)} snapshots collected since ${since}` +
+      (days < 7 ? ` — the history is still building up, so recurring patterns are not reliable yet.` : '.') +
+      ' The real-time feed has no archive: this exists only because the pipeline saves a snapshot every 15 minutes.';
+    renderTimeline(h.snapshots);
+    renderHours(h.by_hour);
+    renderChronic(h.by_route, h);
+  }
 
-    function scoreToColor(t) {
-      const clamped = Math.max(0, Math.min(1, t));
-      const hue = 120 * clamped; // 0 = red (worst), 120 = green (best)
-      return `hsl(${hue.toFixed(0)}, 70%, 45%)`;
+  function axisSvg(W, H, m, yLo, yHi, yStep, y) {
+    let g = '';
+    for (let v = Math.ceil(yLo / yStep) * yStep; v <= yHi + 1e-9; v += yStep) {
+      g += `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
+      g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end" class="num">${v === 0 ? '0' : (v / 60 % 1 === 0 ? (v > 0 ? '+' : '−') + Math.abs(v / 60) + ' min' : (v > 0 ? '+' : '−') + Math.abs(v) + ' s')}</text>`;
     }
-    function normalizeForColor(values, invert) {
-      const lo = Math.min(...values);
-      const hi = Math.max(...values);
-      if (hi === lo) return values.map(() => 0.5);
-      const scaled = values.map(v => (v - lo) / (hi - lo));
-      return invert ? scaled.map(s => 1 - s) : scaled;
-    }
-    // lower delay = greener, higher delay = redder
-    const colorNorm = normalizeForColor(routes.map(r => r.avg_delay_s), true);
-    const barColors = colorNorm.map(t => scoreToColor(t));
+    return g;
+  }
+  function niceStep(span) { return span <= 120 ? 30 : span <= 300 ? 60 : span <= 900 ? 180 : 300; }
 
-    new Chart(document.getElementById('delayChart'), {
-      type: 'bar',
-      data: {
-        labels: routes.map(r => r.route_name),
-        datasets: [{
-          label: 'Average delay (s)',
-          data: routes.map(r => r.avg_delay_s),
-          backgroundColor: barColors
-        }]
-      },
-      options: {
-        plugins: {
-          legend: { display: false },
-          title: { display: true, text: 'Average delay by route, this snapshot (green = on time/early, red = most delayed)' },
-          tooltip: {
-            callbacks: {
-              title: (items) => {
-                const r = routes[items[0].dataIndex];
-                return `Route ${r.route_name}`;
-              },
-              label: (item) => {
-                const r = routes[item.dataIndex];
-                return [`Avg delay: ${r.avg_delay_s}s`, `Trips observed: ${r.n_trips_observed}`, `Skipped stops: ${r.n_skipped}`];
-              }
-            }
-          }
-        },
-        scales: { y: { title: { display: true, text: 'Average delay (seconds)' } } }
-      }
+  function renderTimeline(snaps) {
+    const W = 520, H = 260, m = { l: 56, r: 12, t: 12, b: 28 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const vals = snaps.map(s => s.avg_delay_s);
+    const yLo = Math.min(EARLY_OK - 30, ...vals), yHi = Math.max(LATE_OK + 30, ...vals);
+    const t0 = snaps[0].ts, t1 = Math.max(snaps[snaps.length - 1].ts, t0 + 3600);
+    const x = t => m.l + (t - t0) / (t1 - t0) * iw, y = v => m.t + (1 - (v - yLo) / (yHi - yLo)) * ih;
+    let g = `<rect class="band" x="${m.l}" width="${iw}" y="${y(LATE_OK)}" height="${y(EARLY_OK) - y(LATE_OK)}"/>`;
+    g += axisSvg(W, H, m, yLo, yHi, niceStep(yHi - yLo), y);
+    g += `<line class="zero" x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}"/>`;
+    // x ticks: days or hours
+    const spanH = (t1 - t0) / 3600, stepH = spanH > 48 ? 24 : spanH > 12 ? 6 : spanH > 3 ? 1 : 0.25;
+    const start = Math.ceil(t0 / (stepH * 3600)) * stepH * 3600;
+    for (let t = start; t <= t1; t += stepH * 3600) {
+      const d = new Date(t * 1000);
+      const lbl = stepH >= 24 ? d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'Europe/Paris' }) : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+      g += `<text x="${x(t)}" y="${H - 8}" text-anchor="middle" class="num">${lbl}</text>`;
+    }
+    // line, broken on gaps > 1 h (pipeline stopped)
+    let path = '';
+    snaps.forEach((s, i) => { path += (i === 0 || s.ts - snaps[i - 1].ts > 3600 ? 'M' : 'L') + x(s.ts).toFixed(1) + ',' + y(s.avg_delay_s).toFixed(1); });
+    g += `<path class="ln" d="${path}"/>`;
+    if (snaps.length <= 40) snaps.forEach(s => g += `<circle class="pt" cx="${x(s.ts)}" cy="${y(s.avg_delay_s)}" r="4"/>`);
+    g += `<line class="cross" id="tlx" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" style="display:none"/>`;
+    g += `<rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}"/>`;
+    $('timeline').innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Network average delay over time">${g}</svg>`;
+    const svg = $('timeline').querySelector('svg'), hit = svg.querySelector('.hit'), cx = svg.querySelector('#tlx');
+    hit.addEventListener('mousemove', e => {
+      const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+      const lx = p.matrixTransform(svg.getScreenCTM().inverse()).x;
+      const t = t0 + (lx - m.l) / iw * (t1 - t0);
+      const s = snaps.reduce((a, b) => Math.abs(b.ts - t) < Math.abs(a.ts - t) ? b : a);
+      cx.setAttribute('x1', x(s.ts)); cx.setAttribute('x2', x(s.ts)); cx.style.display = '';
+      showTip(`<div class="tt-title">${new Date(s.ts * 1000).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}</div>
+        <div class="tt-row">Network delay <b class="num">${fmtDelay(s.avg_delay_s)}</b></div>
+        <div class="tt-row">Routes late &gt; 3 min <b class="num">${s.n_routes_late} / ${s.n_routes}</b></div>`, e.clientX, e.clientY);
     });
-  })
-  .catch(err => {
-    document.getElementById('kpis').innerHTML =
-      '<p>Could not load network status (' + err + '). Check that ' +
-      '<code>docs/data/current_state.json</code> exists in the repo.</p>';
-  });
+    hit.addEventListener('mouseleave', () => { cx.style.display = 'none'; hideTip(); });
+  }
+
+  function renderHours(byHour) {
+    const W = 520, H = 260, m = { l: 56, r: 12, t: 12, b: 28 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const map = Object.fromEntries(byHour.map(b => [b.hour, b]));
+    const vals = byHour.map(b => b.avg_delay_s);
+    const yLo = Math.min(0, EARLY_OK, ...vals), yHi = Math.max(LATE_OK, ...vals);
+    const y = v => m.t + (1 - (v - yLo) / (yHi - yLo)) * ih;
+    const bw = iw / 24;
+    let g = `<rect class="band" x="${m.l}" width="${iw}" y="${y(LATE_OK)}" height="${y(EARLY_OK) - y(LATE_OK)}"/>`;
+    g += axisSvg(W, H, m, yLo, yHi, niceStep(yHi - yLo), y);
+    for (let hr = 0; hr < 24; hr++) {
+      const b = map[hr], x0 = m.l + hr * bw;
+      if (hr % 3 === 0) g += `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle" class="num">${String(hr).padStart(2, '0')}h</text>`;
+      if (!b) continue;
+      const top = y(Math.max(0, b.avg_delay_s)), bot = y(Math.min(0, b.avg_delay_s));
+      g += `<rect data-h="${hr}" x="${x0 + 2}" width="${bw - 4}" y="${top}" height="${Math.max(1, bot - top)}" rx="3" fill="${routeColor(b.avg_delay_s)}"/>`;
+      g += `<rect class="hit" data-h="${hr}" x="${x0}" width="${bw}" y="${m.t}" height="${ih}"/>`;
+    }
+    g += `<line class="zero" x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}"/>`;
+    const missing = 24 - byHour.length;
+    $('hours').innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Average delay by hour of day">${g}</svg>` +
+      (missing > 0 ? `<p class="note">${missing} hour${missing > 1 ? 's' : ''} of the day not observed yet.</p>` : '');
+    $('hours').querySelectorAll('.hit').forEach(r => {
+      const b = map[+r.dataset.h];
+      bindTip(r, `<div class="tt-title">${String(b.hour).padStart(2, '0')}:00 – ${String(b.hour).padStart(2, '0')}:59</div>
+        <div class="tt-row">Average delay <b class="num">${fmtDelay(b.avg_delay_s)}</b></div>
+        <div class="tt-row">Snapshots <b class="num">${b.n_snapshots}</b></div>`);
+    });
+  }
+
+  function renderChronic(rows, h) {
+    const top = rows.slice(0, 12);
+    $('chronic').innerHTML = `<thead><tr><th>Route</th><th>Avg delay (7 days)</th><th>Snapshots late</th><th>Worst trip seen</th><th>Snapshots</th></tr></thead><tbody>` +
+      top.map(r => {
+        const p = r.pct_snapshots_late;
+        const pill = p >= 50 ? 'crit' : p >= 20 ? 'warn' : '';
+        return `<tr><td><b>${esc(r.route_name)}</b></td><td class="num">${fmtDelay(r.avg_delay_s)}</td>
+          <td class="num">${pill ? `<span class="pill ${pill}">${fmt(p)} %</span>` : fmt(p) + ' %'}</td>
+          <td class="num">${fmtDelay(r.worst_delay_s)}</td><td class="num">${r.n_snapshots}</td></tr>`;
+      }).join('') + '</tbody>';
+  }
+
+  // ---------------- supply vs population ----------------
+  let communes = [], sortKey = 'rank', sortDir = 1;
+  let netAvg = 0;
+  function flagsOf(c) {
+    const f = [];
+    if (c.n_stops <= 3) f.push(['warn', 'Very few stops']);
+    if (c.top_stop_share >= 0.4) f.push(['warn', 'One stop drives the number']);
+    // a small commune with more than twice the network rate is almost always
+    // picking up stops from Le Mans' outer neighbourhoods (nearest-centre rule)
+    if (c.commune !== 'Le Mans' && c.visits_per_1000 > 2 * netAvg) f.push(['warn', 'Includes Le Mans stops']);
+    if (c.commune === 'Le Mans') f.push(['warn', 'Under-counted']);
+    return f;
+  }
+  function renderSupply(sup) {
+    netAvg = sup.network.visits_per_1000;
+    communes = sup.communes.map(c => ({ ...c, flags: flagsOf(c) }));
+    const max = Math.max(...communes.map(c => c.visits_per_1000));
+    const avg = sup.network.visits_per_1000;
+    const ul = $('supply');
+    ul.innerHTML = communes.map((c, i) => `<li data-i="${i}" class="${c.flags.length ? 'flag' : ''}"><span class="nm">${esc(c.commune.replace(/-/g, ' '))}</span>
+      <span class="track"><span class="bar" style="width:${c.visits_per_1000 / max * 100}%"></span>${i === 0 ? '' : ''}<span class="ref" style="left:${avg / max * 100}%"></span></span>
+      <span class="val num">${fmt(c.visits_per_1000)}</span></li>`).join('');
+    ul.querySelectorAll('li').forEach(li => {
+      const c = communes[+li.dataset.i];
+      bindTip(li, communeTip(c, avg));
+    });
+    renderCommuneTable(avg);
+    try { renderMap(sup, max); } catch (e) { $('map').innerHTML = '<div class="empty">Map unavailable offline.</div>'; }
+  }
+  function communeTip(c, avg) {
+    return `<div class="tt-title">${esc(c.commune.replace(/-/g, ' '))}</div>
+      <div class="tt-row">Stop-visits / 1,000 residents <b class="num">${fmt(c.visits_per_1000)}</b></div>
+      <div class="tt-row">Network average <b class="num">${fmt(avg)}</b></div>
+      <div class="tt-row">Population <b class="num">${fmt(c.population)}</b></div>
+      <div class="tt-row">Stops served <b class="num">${c.n_stops}</b></div>
+      <div class="tt-row">Weekday stop-visits <b class="num">${fmt(c.stop_visits)}</b></div>
+      <div class="tt-row">Busiest stop <b>${esc(c.top_stop_name)}</b></div>
+      ${c.flags.map(f => `<div style="margin-top:4px;color:var(--warn)">▲ ${f[1]}</div>`).join('')}`;
+  }
+  const ccols = [
+    ['rank', '#', c => c.rank], ['commune', 'Commune', c => c.commune], ['population', 'Population', c => c.population],
+    ['n_stops', 'Stops', c => c.n_stops], ['stop_visits', 'Stop-visits', c => c.stop_visits],
+    ['visits_per_1000', 'Per 1,000 res.', c => c.visits_per_1000], ['top_stop_name', 'Busiest stop', c => c.top_stop_name],
+    ['top_stop_share', 'Busiest share', c => c.top_stop_share], ['flags', 'Caution', c => c.flags.length],
+  ];
+  function renderCommuneTable(avg) {
+    const col = ccols.find(c => c[0] === sortKey);
+    const rows = [...communes].sort((a, b) => { const va = col[2](a), vb = col[2](b); return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sortDir; });
+    $('communes').innerHTML = `<thead><tr>${ccols.map(c => `<th data-k="${c[0]}">${c[1]} ${c[0] === sortKey ? `<span class="arr">${sortDir > 0 ? '▲' : '▼'}</span>` : ''}</th>`).join('')}</tr></thead><tbody>` +
+      rows.map(c => `<tr><td class="num">${c.rank}</td><td style="text-align:left"><b>${esc(c.commune.replace(/-/g, ' '))}</b></td>
+        <td class="num">${fmt(c.population)}</td><td class="num">${c.n_stops}</td><td class="num">${fmt(c.stop_visits)}</td>
+        <td class="num"><b>${fmt(c.visits_per_1000)}</b></td><td style="text-align:left">${esc(c.top_stop_name)}</td>
+        <td class="num">${fmt(c.top_stop_share * 100)} %</td>
+        <td style="text-align:left">${c.flags.map(f => `<span class="pill ${f[0]}">${f[1]}</span>`).join(' ')}</td></tr>`).join('') + '</tbody>';
+    $('communes').querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = ['rank', 'commune', 'top_stop_name'].includes(k) ? 1 : -1; }
+      renderCommuneTable(avg);
+    }));
+  }
+  function seq(t) {
+    const h = s => s.replace('#', '').match(/../g).map(x => parseInt(x, 16));
+    const a = h(css('--seq-lo')), b = h(css('--seq-hi'));
+    return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * Math.max(0, Math.min(1, t)))).join(',')})`;
+  }
+  function renderMap(sup, max) {
+    const dark = document.documentElement.dataset.theme === 'dark' || (matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light');
+    const map = L.map('map', { scrollWheelZoom: false });
+    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 16, attribution: '© OpenStreetMap © CARTO' }).addTo(map);
+    const logMax = Math.log(max + 1);
+    // communes: shaded circles (sequential, one hue)
+    communes.forEach(c => {
+      const t = Math.log(c.visits_per_1000 + 1) / logMax;
+      L.circle([c.lat, c.lon], { radius: 900, color: css('--surface'), weight: 2, fillColor: seq(t), fillOpacity: .55 })
+        .bindTooltip(communeTip(c, sup.network.visits_per_1000), { className: 'tt', direction: 'top', sticky: true }).addTo(map);
+    });
+    // stops: small dots sized by visits
+    const vmax = Math.max(...sup.stops.map(s => s.visits));
+    sup.stops.forEach(s => {
+      L.circleMarker([s.lat, s.lon], { radius: 1.5 + 5 * Math.sqrt(s.visits / vmax), stroke: false, fillColor: css('--text'), fillOpacity: .55 })
+        .bindTooltip(`<div class="tt-title">${esc(s.stop_name)}</div><div class="tt-row">Weekday visits <b class="num">${s.visits}</b></div><div class="tt-row">Counted for <b>${esc(s.commune.replace(/-/g, ' '))}</b></div>`, { className: 'tt', direction: 'top' }).addTo(map);
+    });
+    communes.forEach(c => L.marker([c.lat, c.lon], { icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }), interactive: false }).bindTooltip(esc(c.commune.replace(/-/g, ' ')), { permanent: true, direction: 'center', className: 'lbl' }).addTo(map));
+    map.fitBounds(communes.map(c => [c.lat, c.lon]), { padding: [20, 20] });
+  }
+})();
 </script>
 </body>
 </html>
