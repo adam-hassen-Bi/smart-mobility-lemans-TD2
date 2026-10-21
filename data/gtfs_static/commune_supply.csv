@@ -1,0 +1,21 @@
+commune,lat,lon,population,stop_visits,n_stops,top_stop_visits,top_stop_name,visits_per_1000,stops_per_1000,top_stop_share,rank
+La-Chapelle-Saint-Aubin,48.035132,0.156778,2319,2343,53,82,Émile Delahaye,1010.3,22.85,0.035,1
+Coulaines,48.030875,0.208443,8226,6267,105,111,La Paix,761.9,12.76,0.018,2
+Rouillon,47.995585,0.141409,2666,1906,41,188,St-Joseph,714.9,15.38,0.099,3
+Allonnes,47.960493,0.150194,10846,4017,69,160,Lycée André Malraux,370.4,6.36,0.04,4
+Arnage,47.930086,0.195402,5548,1638,34,193,Oasis-Centre des Expositions,295.2,6.13,0.118,5
+Yvre-l-Eveque,48.026286,0.271411,4269,750,22,51,Avenue du Mans,175.7,5.15,0.068,6
+Saint-Saturnin,48.054627,0.164448,2864,490,21,57,Cinémas CGR,171.1,7.33,0.116,7
+La-Milesse,48.06312,0.132381,2650,425,15,86,Four à Chanvre,160.4,5.66,0.202,8
+Sarge-les-le-Mans,48.040678,0.249355,3941,630,15,42,Bignon,159.9,3.81,0.067,9
+Le Mans,47.993335,0.191169,148876,22900,329,250,Gares,153.8,2.21,0.011,10
+Ruaudin,47.945001,0.261633,3542,536,22,53,Guetteloup,151.3,6.21,0.099,11
+Champagne,48.014163,0.331368,3728,425,19,26,Auvours,114.0,5.1,0.061,12
+Mulsanne,47.918943,0.248322,5352,525,18,42,Stade Mulsanne,98.1,3.36,0.08,13
+Aigne,48.066061,0.111904,1724,138,6,23,Mairie Aigné,80.0,3.48,0.167,14
+Pruille-le-Chetif,47.990274,0.114073,1357,88,8,11,Stade Asnillé,64.8,5.9,0.125,15
+Fay,48.008039,0.074566,770,44,3,22,Église Fay,57.1,3.9,0.5,16
+Trange,48.03046,0.111992,1678,87,6,15,Maisons Rouges,51.8,3.58,0.172,17
+Chaufour-Notre-Dame,48.024716,0.079083,1187,58,3,29,La Denisière,48.9,2.53,0.5,18
+Saint-Georges-du-Bois,47.972349,0.102337,2308,96,7,24,Centre Commercial,41.6,3.03,0.25,19
+Fatines,48.047884,0.332902,937,38,2,25,Place de l'Église,40.6,2.13,0.658,20
