@@ -27,7 +27,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/history/ docs/data/current_state.json
+          git add data/history/ docs/data/current_state.json docs/data/history.json
           git commit -m "Update realtime snapshot [automated]" || echo "Nothing to commit"
           # the other workflow may have pushed in the meantime
           git pull --rebase
