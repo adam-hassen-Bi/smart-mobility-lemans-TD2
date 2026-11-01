@@ -1,0 +1,3 @@
+snapshot_ts,route_id,n_trips_observed,n_stop_updates,n_skipped,avg_delay_s,max_delay_s
+1793491646,T1,3,72,0,-34.8,16
+1793491646,T2,1,18,0,-44.4,-7
